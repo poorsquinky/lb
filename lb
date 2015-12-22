@@ -1,0 +1,122 @@
+#!/bin/bash
+
+COLOR_DIR="\033[38;5;39m"
+COLOR_DIRMARK="\033[38;5;242m"
+COLOR_QUIET="\033[38;5;238m"
+
+COLOR_RESET="\033[0m"
+
+PCT_COLORS="
+    90:\033[38;5;196m
+    80:\033[38;5;160m
+    70:\033[38;5;202m
+    60:\033[38;5;214m
+    50:\033[38;5;220m
+    40:\033[38;5;226m
+    30:\033[38;5;154m
+    20:\033[38;5;118m
+    10:\033[38;5;121m
+    5:\033[38;5;123m
+"
+
+
+
+function pad {
+
+    LEN=$1
+    shift
+
+    OUT="$@"
+    OUTLEN=$(echo -n "$OUT" | wc -c)
+    while [ $OUTLEN -lt $LEN ]; do
+        OUT=" $OUT"
+        OUTLEN=$(( OUTLEN + 1 ))
+    done
+
+    echo -n "$OUT"
+
+}
+
+function pct {
+    A=$(( $(( 1000 * $1 )) / $2 ))
+    B=$(( $A / 10 ))
+    C=$(( $A - $(( 10 * $B)) ))
+
+    for CC in $PCT_COLORS; do
+        THRESHOLD=$(echo $CC | sed -e 's/:.*//')
+        COLOR=$(echo $CC | sed -e 's/.*://')
+        if [ $B -ge $THRESHOLD ]; then
+            echo -n -e "$COLOR"
+            break
+        fi
+    done
+
+    pad 4 "$B.$C"
+}
+
+function getloc {
+    (
+
+    LOCATION=$1
+    INDENT=$2
+
+    SKIPCOUNT=0
+
+    pushd "$LOCATION" > /dev/null
+
+    while read ITEM; do
+
+        BYTES=$(du -skx "$ITEM" 2>/dev/null | awk '{print $1}')
+        test -z "$BYTES" && BYTES=0
+
+        WD_PCT=$(( $(( $(( 1000 * $BYTES )) / $BYTES_THISDIR )) / 10 ))
+
+        # only bother showing things that are >1% of wd
+        if [ $WD_PCT -ge 1 ]; then
+
+            ITEMTYPE=$(stat --format='%F' "$ITEM")
+
+            pad 12 $BYTES
+            echo -n " "
+
+            pct $BYTES $BYTES_THISDIR
+            echo -n "% wd"
+            echo -n -e "$COLOR_RESET"
+            echo -n ", "
+            pct $BYTES $BYTES_FS
+            echo -n "% fs"
+            echo -n -e "$COLOR_RESET, "
+
+
+            echo -n "$INDENT"
+            test -z "$INDENT" || echo -ne "${COLOR_DIRMARK}↳ ${COLOR_RESET}"
+
+            if [ "$ITEMTYPE" == "directory" ]; then
+                echo -ne "${COLOR_DIR}${ITEM}${COLOR_RESET}"
+                echo "/"
+
+                if [ $WD_PCT -ge 5 ]; then
+                    getloc "$ITEM" "$INDENT  "
+
+            else
+                echo -n "$ITEM"
+                echo
+            fi
+
+        else
+            SKIPCOUNT=$(( SKIPCOUNT + 1 ))
+        fi
+
+    done < <( find . -maxdepth 1 -type d|grep -v ^\\.\$ |sort|sed 's/^\.\///'; ls -lrSh | grep ^- | sed -E -e 's/^([^ ]+ +){8}//' )
+
+    popd > /dev/null
+
+    )
+}
+
+BYTES_THISDIR=$(du -sk . 2>/dev/null | awk '{print $1}')
+BYTES_FS=$(df -k . | tail -1 | awk '{print $2}')
+
+
+getloc '.' ''
+
