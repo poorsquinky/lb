@@ -19,9 +19,7 @@ PCT_COLORS="
     5:\033[38;5;123m
 "
 
-
-
-function pad {
+function pad () {
 
     LEN=$1
     shift
@@ -37,7 +35,7 @@ function pad {
 
 }
 
-function pct {
+function pct () {
     A=$(( $(( 1000 * $1 )) / $2 ))
     B=$(( $A / 10 ))
     C=$(( $A - $(( 10 * $B)) ))
@@ -54,7 +52,24 @@ function pct {
     pad 4 "$B.$C"
 }
 
+MAXDIVIDE=1073741824  # expressed as KB
+DIVIDENAMES=( TB GB MB KB )
+
+function humanizekb () {
+    AMT=$1
+
+    I=0
+    D=$MAXDIVIDE
+    while [ $AMT -lt $D ]; do
+        D=$(( D / 1024 ))
+        I=$(( I + 1 ))
+    done
+    echo -n "$(( AMT / D )) ${DIVIDENAMES[$I]}"
+
+}
+
 function getloc {
+
     (
 
     LOCATION=$1
@@ -76,8 +91,8 @@ function getloc {
 
             ITEMTYPE=$(stat --format='%F' "$ITEM")
 
-            pad 12 $BYTES
-            echo -n " "
+            pad 7 $( humanizekb $BYTES )
+            echo -n "  "
 
             pct $BYTES $BYTES_THISDIR
             echo -n "% wd"
@@ -97,21 +112,29 @@ function getloc {
 
                 if [ $WD_PCT -ge 5 ]; then
                     getloc "$ITEM" "$INDENT  "
+                fi
 
             else
                 echo -n "$ITEM"
                 echo
             fi
 
+
         else
             SKIPCOUNT=$(( SKIPCOUNT + 1 ))
         fi
 
+
+
     done < <( find . -maxdepth 1 -type d|grep -v ^\\.\$ |sort|sed 's/^\.\///'; ls -lrSh | grep ^- | sed -E -e 's/^([^ ]+ +){8}//' )
+
+#    pad 33 ""
+#    echo -e "${COLOR_QUIET}${INDENT}(${SKIPCOUNT} skipped)${COLOR_RESET}"
 
     popd > /dev/null
 
     )
+
 }
 
 BYTES_THISDIR=$(du -sk . 2>/dev/null | awk '{print $1}')
